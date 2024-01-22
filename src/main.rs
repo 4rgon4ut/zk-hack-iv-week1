@@ -188,8 +188,40 @@ fn main() {
 
     /* Enter your solution here */
 
-    let nullifier_hack = MNT4BigFr::from(0);
-    let secret_hack = MNT4BigFr::from(0);
+    /*
+    The idea here is to find an such scalar that gives us pk^-1 (inverse of pk).
+    Let s be a leaked_secret, and G be a generator of G1 from MNT6-753. Than:
+
+        pk = [s]G = (x, y)
+
+    We want to find such scalar s' that gives us pk^-1:
+
+        pk' = [s']G = (x, -y).
+
+    This will be a solution because circuit takes nullifier which is a H = Posidon(s)
+    and uses Weirestrass EC form pk.x to count(and prevent double spend) spending event
+    for that pk.x. As follows from the hint, there are exists a valid point (x, -y) that
+    will be accepted(as only x checked). Thus s' = [s']G = (x, -y) will allow us to create
+    distinct nullifier H' = Posidon(s') for the same number x from (x, -y) that will be
+    accepted by the circuit. [aka double spend]
+
+    As we know that pk + pk^-1 = O (neutral element of EC group), we can find s' as follows:
+
+    s[G] + s'[G] = O
+    O - s[G] = s'[G]  # here we need to use little trick to represent O as [order]G
+                      # where order is a modulus of scalar F of MNT4 curve
+                      # we also knows that base F of MNT6 is equal to scalar F of MNT4
+                      # ==> O = [MNT6.Fp_modulus]G
+
+    [MNT6.Fp_modulus]G - [s]G = [MNT6.Fp_modulus - s]G = [s']G
+    */
+
+    let modulus = MNT6BigFr::MODULUS;
+
+    // We have to perform conversion here as we have no bigint trait in the scope
+    let secret_hack = MNT4BigFr::from(modulus) - leaked_secret;
+    let nullifier_hack =
+        <LeafH as CRHScheme>::evaluate(&leaf_crh_params, vec![secret_hack]).unwrap();
 
     /* End of solution */
 
@@ -210,7 +242,7 @@ fn main() {
 }
 
 const PUZZLE_DESCRIPTION: &str = r"
-Bob was deeply inspired by the Zcash design [1] for private transactions [2] and had some pretty cool ideas on how to adapt it for his requirements. He was also inspired by the Mina design for the lightest blockchain and wanted to combine the two. In order to achieve that, Bob used the MNT7653 cycle of curves to enable efficient infinite recursion, and used elliptic curve public keys to authorize spends. He released a first version of the system to the world and Alice soon announced she was able to double spend by creating two different nullifiers for the same key... 
+Bob was deeply inspired by the Zcash design [1] for private transactions [2] and had some pretty cool ideas on how to adapt it for his requirements. He was also inspired by the Mina design for the lightest blockchain and wanted to combine the two. In order to achieve that, Bob used the MNT7653 cycle of curves to enable efficient infinite recursion, and used elliptic curve public keys to authorize spends. He released a first version of the system to the world and Alice soon announced she was able to double spend by creating two different nullifiers for the same key...
 
 [1] https://zips.z.cash/protocol/protocol.pdf
 ";
